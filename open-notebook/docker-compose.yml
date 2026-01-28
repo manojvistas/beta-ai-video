@@ -1,0 +1,46 @@
+services:
+  surrealdb:
+    image: surrealdb/surrealdb:v2
+    volumes:
+      - ./surreal_data:/mydata
+    environment:
+      - SURREAL_EXPERIMENTAL_GRAPHQL=true
+    ports:
+      - "18080:18080"
+    command: start --bind 0.0.0.0:18080 --log info --user root --pass root rocksdb:/mydata/mydatabase.db
+    pull_policy: always
+    user: root
+    restart: always
+
+  backend:
+    image: manoj427/open-notebook-backend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "15055:15055"
+    env_file:
+      - ./docker.env
+    depends_on:
+      - surrealdb
+    volumes:
+      - ./notebook_data:/app/data
+    restart: always
+
+  frontend:
+    image: manoj427/open-notebook-frontend:latest
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "13000:13000"
+    env_file:
+      - ./docker.env
+    environment:
+      - NODE_ENV=production
+      - API_URL=http://localhost:13000
+      # INTERNAL_API_URL used by server-side Next.js to talk to backend container
+      - INTERNAL_API_URL=http://backend:15055
+    depends_on:
+      - backend
+    restart: always
