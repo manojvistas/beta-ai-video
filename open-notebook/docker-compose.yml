@@ -1,6 +1,6 @@
 services:
   surrealdb:
-    image: surrealdb/surrealdb:v2
+    image: open-notebook/surrealdb:v2
     volumes:
       - ./surreal_data:/mydata
     environment:
@@ -8,12 +8,12 @@ services:
     ports:
       - "18080:18080"
     command: start --bind 0.0.0.0:18080 --log info --user root --pass root rocksdb:/mydata/mydatabase.db
-    pull_policy: always
+    pull_policy: never
     user: root
     restart: always
 
   backend:
-    image: manoj427/open-notebook-backend:latest
+    image: open-notebook/backend:latest
     build:
       context: .
       dockerfile: Dockerfile.backend
@@ -27,8 +27,21 @@ services:
       - ./notebook_data:/app/data
     restart: always
 
+  auth-api:
+    build:
+      context: ./auth-api
+      dockerfile: Dockerfile
+    image: open-notebook/auth-api:latest
+    ports:
+      - "4000:4000"
+    env_file:
+      - ./auth-api/.env
+    depends_on:
+      - surrealdb
+    restart: always
+
   frontend:
-    image: manoj427/open-notebook-frontend:latest
+    image: open-notebook/frontend:latest
     build:
       context: .
       dockerfile: frontend/Dockerfile
@@ -38,9 +51,11 @@ services:
       - ./docker.env
     environment:
       - NODE_ENV=production
-      - API_URL=http://localhost:13000
+      - API_URL=http://localhost:15055
+      # NEXT_PUBLIC_AUTH_API_URL removed to verify via proxy
       # INTERNAL_API_URL used by server-side Next.js to talk to backend container
       - INTERNAL_API_URL=http://backend:15055
+      - INTERNAL_AUTH_API_URL=http://auth-api:4000
     depends_on:
       - backend
     restart: always
