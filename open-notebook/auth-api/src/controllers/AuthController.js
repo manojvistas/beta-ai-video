@@ -84,6 +84,7 @@ async function login(req, res, next) {
 
     res.cookie('access_token', access, createCookieOptions(false))
     res.cookie('refresh_token', refresh, createCookieOptions(true))
+    console.info('[Auth] Set auth cookies (login)', { userId: user.id, email: user.email })
     res.json({ id: user.id, email: user.email })
   } catch (err) {
     next(err)
@@ -111,6 +112,7 @@ async function refreshToken(req, res, next) {
     const { user, access, refresh: newRefresh } = await refreshSession(refresh)
     res.cookie('access_token', access, createCookieOptions(false))
     res.cookie('refresh_token', newRefresh, createCookieOptions(true))
+    console.info('[Auth] Set auth cookies (refresh)', { userId: user.id, email: user.email })
     res.json({ id: user.id, email: user.email })
   } catch (err) {
     next(err)
@@ -119,6 +121,7 @@ async function refreshToken(req, res, next) {
 
 async function getProfile(req, res, next) {
   try {
+    console.info('[Auth] /me called', { userId: req.user.id, email: req.user.email })
     res.json({ id: req.user.id, email: req.user.email })
   } catch (err) {
     next(err)

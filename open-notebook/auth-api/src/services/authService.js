@@ -1,46 +1,74 @@
 const bcrypt = require('bcrypt')
-const { signAccessToken, signRefreshToken, verifyRefreshToken } = require('../utils/jwt')
-const { generateTokenPair } = require('./tokenService')
-const { createSession, findSessionByJti, revokeSession } = require('../models/sessionModel')
-const { findUserByEmail, findUserById } = require('../models/userModel')
-const { hashToken } = require('../utils/crypto')
+const crypto = require('crypto')
 const { env } = require('../config/env')
+const { signAccessToken, signRefreshToken, verifyRefreshToken } = require('../utils/jwt')
+const { findUserByEmail, findUserById } = require('../models/userModel')
+const { createSession, findSessionByJti, revokeSession } = require('../models/sessionModel')
+const { hashToken } = require('../utils/crypto')
+
+function parseTtlToMs(ttl) {
+  if (!ttl || typeof ttl !== 'string') {
+    return null
+  }
+  const match = ttl.trim().match(/^(\d+)([smhd])$/)
+  if (!match) {
+    return null
+  }
+  const value = Number(match[1])
+  const unit = match[2]
+  const multipliers = { s: 1000, m: 60000, h: 3600000, d: 86400000 }
+  return value * multipliers[unit]
+}
 
 function createCookieOptions(isRefresh) {
-  const maxAge = isRefresh ? 1000 * 60 * 60 * 24 * 30 : 1000 * 60 * 15
-  return {
+  const appUrl = env.APP_URL || ''
+  const isHttps = appUrl.startsWith('https://')
+  const isProd = env.NODE_ENV === 'production'
+  const secure = isProd && isHttps
+  const sameSite = secure ? 'none' : 'lax'
+  const maxAge = parseTtlToMs(isRefresh ? env.JWT_REFRESH_TTL : env.JWT_ACCESS_TTL)
+
+  const options = {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: env.NODE_ENV === 'production',
-    maxAge,
+    secure,
+    sameSite,
     path: '/',
   }
+
+  if (maxAge) {
+    options.maxAge = maxAge
+  }
+
+  return options
 }
 
 async function loginWithPassword(email, password, meta) {
-  const user = await findUserByEmail(email)
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
+  const normalizedPassword = typeof password === 'string' ? password : ''
+
+  const user = await findUserByEmail(normalizedEmail)
   if (!user || !user.password_hash) {
     const err = new Error('Invalid credentials')
     err.status = 401
     throw err
   }
 
-  const ok = await bcrypt.compare(password, user.password_hash)
-  if (!ok) {
+  const valid = await bcrypt.compare(normalizedPassword, user.password_hash)
+  if (!valid) {
     const err = new Error('Invalid credentials')
     err.status = 401
     throw err
   }
 
-  const jwt_id = cryptoRandomId()
+  const jwt_id = crypto.randomBytes(16).toString('hex')
   const access = signAccessToken({ sub: user.id, email: user.email })
   const refresh = signRefreshToken({ sub: user.id, jti: jwt_id })
 
   await createSession({
     user_id: user.id,
     jwt_id,
-    ip: meta.ip,
-    user_agent: meta.user_agent,
+    ip: meta?.ip || null,
+    user_agent: meta?.user_agent || 'unknown',
     refresh_hash: hashToken(refresh),
   })
 
@@ -48,37 +76,49 @@ async function loginWithPassword(email, password, meta) {
 }
 
 async function refreshSession(refreshToken) {
+  if (!refreshToken) {
+    const err = new Error('Refresh token missing')
+    err.status = 401
+    throw err
+  }
+
   const payload = verifyRefreshToken(refreshToken)
   const session = await findSessionByJti(payload.jti)
   if (!session || session.revoked_at) {
-    const err = new Error('Session revoked')
+    const err = new Error('Refresh token invalid')
     err.status = 401
     throw err
   }
-  if (session.refresh_hash !== hashToken(refreshToken)) {
-    const err = new Error('Invalid refresh token')
+
+  if (session.refresh_hash && session.refresh_hash !== hashToken(refreshToken)) {
+    const err = new Error('Refresh token invalid')
     err.status = 401
     throw err
   }
+
   const user = await findUserById(payload.sub)
-  const newJwtId = cryptoRandomId()
+  if (!user) {
+    const err = new Error('User not found')
+    err.status = 401
+    throw err
+  }
+
+  await revokeSession(session.id)
+
+  const newJwtId = crypto.randomBytes(16).toString('hex')
   const access = signAccessToken({ sub: user.id, email: user.email })
   const refresh = signRefreshToken({ sub: user.id, jti: newJwtId })
 
-  await revokeSession(session.id)
   await createSession({
     user_id: user.id,
     jwt_id: newJwtId,
-    ip: session.ip,
-    user_agent: session.user_agent,
+    ip: session.ip || null,
+    user_agent: session.user_agent || 'unknown',
     refresh_hash: hashToken(refresh),
   })
 
   return { user, access, refresh }
 }
 
-function cryptoRandomId() {
-  return require('crypto').randomBytes(16).toString('hex')
-}
-
 module.exports = { loginWithPassword, refreshSession, createCookieOptions }
+

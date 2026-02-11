@@ -12,6 +12,11 @@ function google(req, res, next) {
 function googleCallback(req, res, next) {
   passport.authenticate('google', { session: false }, async (err, user) => {
     if (err) return next(err)
+    if (!user) {
+      const error = new Error('Google authentication failed')
+      error.status = 401
+      return next(error)
+    }
     const jwt_id = require('crypto').randomBytes(16).toString('hex')
     const access = signAccessToken({ sub: user.id, email: user.email })
     const refresh = signRefreshToken({ sub: user.id, jti: jwt_id })
@@ -26,6 +31,7 @@ function googleCallback(req, res, next) {
 
     res.cookie('access_token', access, createCookieOptions(false))
     res.cookie('refresh_token', refresh, createCookieOptions(true))
+    console.info('[Auth] Set auth cookies (google)', { userId: user.id, email: user.email })
     res.redirect(`${env.APP_URL}/notebooks`)
   })(req, res, next)
 }
