@@ -15,8 +15,8 @@ services:
   backend:
     image: open-notebook/backend:latest
     build:
-      context: .
-      dockerfile: Dockerfile.backend
+      context: ./backend
+      dockerfile: Dockerfile
     ports:
       - "15055:15055"
     env_file:
@@ -43,8 +43,8 @@ services:
   frontend:
     image: open-notebook/frontend:latest
     build:
-      context: .
-      dockerfile: frontend/Dockerfile
+      context: ./frontend
+      dockerfile: Dockerfile
     ports:
       - "13000:13000"
     env_file:

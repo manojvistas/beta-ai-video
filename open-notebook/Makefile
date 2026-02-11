@@ -32,7 +32,7 @@ database:
 
 # Run the API locally (without docker, requires .env)
 api:
-	uv run run_api.py
+	uv run backend/run_api.py
 
 # === Utilities ===
 
