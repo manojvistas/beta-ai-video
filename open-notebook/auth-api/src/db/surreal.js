@@ -2,60 +2,56 @@ const { Surreal } = require('surrealdb')
 const WebSocket = require('ws')
 const { env } = require('../config/env')
 
+if (!global.WebSocket) {
+  global.WebSocket = WebSocket
+}
+
+// Single instance — models destructure this at import time,
+// so we must NEVER replace it, only reconnect on it.
 const surreal = new Surreal()
+let connected = false
+let connecting = false
+
+async function connectAndSignin() {
+  try { await surreal.close() } catch {}
+  await surreal.connect(env.SURREAL_URL)
+  await surreal.signin({ username: env.SURREAL_USER, password: env.SURREAL_PASS })
+  await surreal.use({ namespace: env.SURREAL_NAMESPACE, database: env.SURREAL_DATABASE })
+  connected = true
+}
 
 async function initSurreal() {
-  if (!global.WebSocket) {
-    global.WebSocket = WebSocket
-  }
+  if (connecting) return
+  connecting = true
   try {
-    await surreal.connect(env.SURREAL_URL)
-
-    const signinAttempts = [
-      { username: env.SURREAL_USER, password: env.SURREAL_PASS },
-      { user: env.SURREAL_USER, pass: env.SURREAL_PASS },
-      {
-        username: env.SURREAL_USER,
-        password: env.SURREAL_PASS,
-        namespace: env.SURREAL_NAMESPACE,
-        database: env.SURREAL_DATABASE,
-      },
-      {
-        user: env.SURREAL_USER,
-        pass: env.SURREAL_PASS,
-        ns: env.SURREAL_NAMESPACE,
-        db: env.SURREAL_DATABASE,
-      },
-      {
-        user: env.SURREAL_USER,
-        pass: env.SURREAL_PASS,
-        NS: env.SURREAL_NAMESPACE,
-        DB: env.SURREAL_DATABASE,
-      },
-    ]
-
-    let signedIn = false
-    let lastError = null
-    for (const payload of signinAttempts) {
-      try {
-        await surreal.signin(payload)
-        signedIn = true
-        break
-      } catch (signinError) {
-        lastError = signinError
-      }
-    }
-
-    if (!signedIn) {
-      throw lastError || new Error('SurrealDB signin failed')
-    }
-
-    await surreal.use({ namespace: env.SURREAL_NAMESPACE, database: env.SURREAL_DATABASE })
-    return
+    await connectAndSignin()
+    console.log('SurrealDB connected successfully')
   } catch (error) {
-    console.error('SurrealDB connection failed, retrying in 5s:', error)
+    connected = false
+    console.error('SurrealDB connection failed, retrying in 5s:', error?.message || error)
     setTimeout(initSurreal, 5000)
+  } finally {
+    connecting = false
   }
 }
 
-module.exports = { surreal, initSurreal }
+async function ensureConnection() {
+  if (connected) {
+    try {
+      await surreal.query('SELECT 1')
+      return
+    } catch {
+      console.warn('SurrealDB connection lost, reconnecting...')
+      connected = false
+    }
+  }
+  // Reconnect on the same instance
+  try {
+    await connectAndSignin()
+    console.log('SurrealDB reconnected successfully')
+  } catch (err) {
+    throw new Error('SurrealDB is not connected: ' + (err?.message || err))
+  }
+}
+
+module.exports = { surreal, initSurreal, ensureConnection }
