@@ -16,7 +16,17 @@ async function registerLocalUser({ email, password, profile }) {
 async function findOrCreateGoogleUser(profile) {
   const email = profile.emails?.[0]?.value
   const existing = await findUserByEmail(email)
-  if (existing) return existing
+  if (existing) {
+    // Merge Google profile data into existing user (name + avatar)
+    const mergedProfile = {
+      ...existing.profile,
+      name: existing.profile?.name || profile.displayName,
+      avatar: profile.photos?.[0]?.value || existing.profile?.avatar,
+    }
+    const updates = { profile: mergedProfile, provider: existing.provider === 'local' ? 'google' : existing.provider }
+    const updated = await updateUser(existing.id, updates)
+    return updated || existing
+  }
 
   const user = await createUser({
     email,

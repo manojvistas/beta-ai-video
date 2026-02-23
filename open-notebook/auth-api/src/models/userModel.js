@@ -56,8 +56,8 @@ async function findUserByEmail(email) {
 }
 
 async function findUserById(id) {
-  const result = await surreal.select(id)
-  return result || null
+  const result = await surreal.query('SELECT * FROM type::record($id)', { id })
+  return unwrapQueryRecord(result)
 }
 
 async function updateUser(id, updates) {

@@ -85,7 +85,14 @@ async function login(req, res, next) {
     res.cookie('access_token', access, createCookieOptions(false))
     res.cookie('refresh_token', refresh, createCookieOptions(true))
     console.info('[Auth] Set auth cookies (login)', { userId: user.id, email: user.email })
-    res.json({ id: user.id, email: user.email })
+    
+    // Return full user profile
+    res.json({ 
+      id: user.id, 
+      email: user.email,
+      name: user.profile?.name,
+      picture: user.profile?.avatar
+    })
   } catch (err) {
     next(err)
   }
@@ -113,7 +120,14 @@ async function refreshToken(req, res, next) {
     res.cookie('access_token', access, createCookieOptions(false))
     res.cookie('refresh_token', newRefresh, createCookieOptions(true))
     console.info('[Auth] Set auth cookies (refresh)', { userId: user.id, email: user.email })
-    res.json({ id: user.id, email: user.email })
+    
+    // Return full user profile including Google avatar
+    res.json({ 
+      id: user.id, 
+      email: user.email,
+      name: user.profile?.name,
+      picture: user.profile?.avatar
+    })
   } catch (err) {
     next(err)
   }
@@ -122,7 +136,13 @@ async function refreshToken(req, res, next) {
 async function getProfile(req, res, next) {
   try {
     console.info('[Auth] /me called', { userId: req.user.id, email: req.user.email })
-    res.json({ id: req.user.id, email: req.user.email })
+    // Return full user profile including Google avatar
+    res.json({ 
+      id: req.user.id, 
+      email: req.user.email,
+      name: req.user.profile?.name,
+      picture: req.user.profile?.avatar
+    })
   } catch (err) {
     next(err)
   }
