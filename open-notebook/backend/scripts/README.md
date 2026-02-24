@@ -18,10 +18,10 @@ Consolidates markdown documentation files for use with ChatGPT or other platform
 make export-docs
 
 # Or run directly with uv
-uv run python scripts/export_docs.py
+uv run python backend/scripts/export_docs.py
 
 # Or run with standard Python
-python scripts/export_docs.py
+python backend/scripts/export_docs.py
 ```
 
 ### Output

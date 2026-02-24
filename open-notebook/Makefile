@@ -38,4 +38,4 @@ api:
 
 # Export docs script
 export-docs:
-	uv run python scripts/export_docs.py
+	uv run python backend/scripts/export_docs.py
