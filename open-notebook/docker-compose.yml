@@ -29,13 +29,13 @@ services:
 
   auth-api:
     build:
-      context: ./auth-api
+      context: ./backend/auth-api
       dockerfile: Dockerfile
     image: open-notebook/auth-api:latest
     ports:
       - "4000:4000"
     env_file:
-      - ./auth-api/.env
+      - ./backend/auth-api/.env
     depends_on:
       - surrealdb
     restart: always
